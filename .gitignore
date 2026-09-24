@@ -1,0 +1,21 @@
+# PlatformIO build output
+.pio/
+
+# PlatformIO and VS Code local files
+.vscode/*
+!.vscode/extensions.json
+.clangd/
+
+# Local credentials and device-specific settings
+src/config.h
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Backup folder
+backup/

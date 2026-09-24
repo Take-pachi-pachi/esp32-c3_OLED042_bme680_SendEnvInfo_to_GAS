@@ -58,15 +58,22 @@ const int SEND_MINUTES[]  = {10};
 
 const bool DEBUG_MODE     = true;
 const bool OLED_ROTATED   = true;
-const bool BSEC_USE_ULP   = false;  // true: ULP（約5分）、false: LP（約3秒）
+const bool BSEC_USE_ULP   = true;   // true: ULP（約5分）、false: LP（約3秒）
 const uint8_t BME680_I2C_ADDRESS = 0x77;
+
+// BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正です。
 const float TEMP_OFFSET_BME680_ULP = 0.0F;
 const float TEMP_OFFSET_BME680_LP = 0.0F;
 const float HUM_OFFSET_RATE = 0.0F;
 const float PRESS_OFFSET = 0.0F;
+
+const char* NTP_SERVER_PRIMARY   = "ntp.nict.jp";
+const char* NTP_SERVER_SECONDARY = "pool.ntp.org";
 ```
 
-`config.h`にはWi-FiパスワードやGAS URLが含まれるため、公開リポジトリへ実際の値を登録しないでください。
+`config.h`にはWi-FiパスワードやGAS URLが含まれるため、公開リポジトリへ実際の値を登録しないでください。実機用設定はローカル環境で保持し、READMEのサンプルはプレースホルダーとして扱います。
+
+> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。実際の運用では `BSEC_USE_ULP` を `true` にして 5 分周期を使う構成がデフォルトです。
 
 ## ULP/LP動作モード
 

@@ -1,0 +1,49 @@
+Take-pachi-pachi Non-Commercial License v1.0
+
+Copyright (c) 2026 Take-pachi-pachi
+All rights reserved.
+
+## 1. Definitions
+
+"Software" means the source code and other original materials in this
+repository that are authored by Take-pachi-pachi. It does not include
+third-party libraries, frameworks, firmware, binaries, or other materials
+distributed under their own licenses.
+
+"Commercial Use" means any use primarily intended for or directed toward
+commercial advantage or monetary compensation. This includes selling,
+licensing for a fee, paid services, monetized distribution, advertising-based
+use, and incorporating the Software into a commercial product or service.
+
+## 2. Permission
+
+Permission is granted, free of charge, to any person obtaining a copy of the
+Software to use, copy, modify, and share the Software, provided that the use
+is not Commercial Use and the conditions in this license are followed.
+
+Source and binary redistributions must retain this license, the copyright
+notice, and a clear statement that the Software is subject to this
+Non-Commercial License.
+
+## 3. Restrictions
+
+Commercial Use of the Software is not permitted without prior written
+permission from Take-pachi-pachi. No rights are granted to sell, sublicense,
+or provide the Software as part of a paid product, paid service, or other
+commercial offering.
+
+## 4. Third-party materials
+
+Third-party materials used by or distributed with the Software are not
+covered by this license. They remain subject to their own license terms.
+In particular, Bosch BSEC 2.x binaries have separate Bosch license terms.
+See `THIRD_PARTY_LICENSES.md` for notices and links to those terms.
+
+## 5. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

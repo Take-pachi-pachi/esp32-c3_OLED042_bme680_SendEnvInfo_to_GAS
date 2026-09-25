@@ -190,7 +190,7 @@ BSEC はこれらの値を組み合わせて、室内の換気・におい・湿
 
 ## GASの準備
 
-詳細は https://github.com/Take-pachi-pachi/GAS_Raspi_Temp_Hum_press_IAQ/ を参照。
+詳細は https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/ を参照。
 
 ### 1. スプレッドシート
 

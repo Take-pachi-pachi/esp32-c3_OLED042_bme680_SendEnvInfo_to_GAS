@@ -53,18 +53,18 @@ OLEDとBME680を同じI2Cバスへ接続します。
 const char* WIFI_SSID     = "使用するWi-FiのSSID";
 const char* WIFI_PASSWORD = "Wi-Fiパスワード";
 const char* SHEET_URL     = "GAS WebアプリのURL";
-const char* SHEET_NAME    = "Test";
-const int SEND_MINUTES[]  = {10, 50};
+const char* SHEET_NAME    = "Home-LDK";
+const int SEND_MINUTES[]  = {00};
 
-const bool DEBUG_MODE     = true;
+const bool DEBUG_MODE     = false;
 const bool OLED_ROTATED   = true;
-const bool BSEC_USE_ULP   = false;  // true: ULP（約5分）、false: LP（約3秒）
 const uint8_t BME680_I2C_ADDRESS = 0x77;
+const bool BSEC_USE_ULP   = true;   // true: ULP（約5分）、false: LP（約3秒）
 
 // BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正です。
-const float TEMP_OFFSET_BME680_ULP = 0.0F;
-const float TEMP_OFFSET_BME680_LP = 0.0F;
-const float HUM_OFFSET_RATE = 0.0F;
+const float TEMP_OFFSET_BME680_ULP = -0.6F;
+const float TEMP_OFFSET_BME680_LP = -0.3F;
+const float HUM_OFFSET_RATE = -0.175F;
 const float PRESS_OFFSET = 0.0F;
 
 const char* NTP_SERVER_PRIMARY   = "ntp.nict.jp";
@@ -76,7 +76,7 @@ const char* TIME_ZONE            = "JST-9";
 
 `TIME_ZONE`はPOSIX形式のタイムゾーン文字列です。日本時間は`JST-9`を指定します。POSIX形式ではUTCより東側のオフセットを負の値で表すため、`UTC+9`に相当する指定が`JST-9`になります。
 
-> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。`BSEC_USE_ULP` の現在の設定例は `false`（LP、約3秒周期）です。
+> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。現在の設定は `BSEC_USE_ULP = true`（ULP、約5分周期）です。
 
 ## ULP/LP動作モード
 
@@ -147,7 +147,7 @@ BSECの温度出力 = BSEC標準の温度補正
 補正後気圧 = BSEC出力気圧 + PRESS_OFFSET
 ```
 
-現在のコードはBSECの熱補償湿度出力がない場合にraw humidityを使用し、`HUM_OFFSET_RATE`を適用します。気圧はhPa単位で扱います。
+現在のコードはBSECのraw humidityに`HUM_OFFSET_RATE`を適用します。熱補償湿度出力も登録していますが、raw humidityが取得できない場合のフォールバックとして使用します。気圧はhPa単位で扱います。
 
 ## IAQ計算
 
@@ -256,7 +256,7 @@ const int SEND_MINUTES[] = {10, 40};
 
 1. シリアル通信を初期化します。
 2. Wi-Fiへ接続します。
-3. Wi-Fi接続成功後、`configTime()`でNTPを設定し、ESP32内部時計を日本標準時に合わせます。
+3. Wi-Fi接続成功後、`configTzTime()`でNTPサーバーとタイムゾーンを設定し、ESP32内部時計を日本標準時に合わせます。
 4. 初期NTP同期後、通常時の消費電力を抑えるためWi-Fiを切断します。
 5. OLEDとI2Cバスを初期化し、接続されているI2Cデバイスをスキャンします。
 6. BME680を初期化し、`BSEC_USE_ULP`に応じたBSEC設定とセンサ出力を登録します。
@@ -317,11 +317,11 @@ src/config.h
 `platformio.ini`により、次のライブラリが自動導入されます。
 
 - `olikraus/U8g2`
-- `boschsensortec/BSEC2`
-- `BME68x Sensor library`
+- `https://github.com/BoschSensortec/Bosch-BME68x-Library.git`
+- `https://github.com/BoschSensortec/Bosch-BSEC2-Library.git`
 - ESP32 Arduino標準の`WiFi`、`HTTPClient`、`Wire`
 
-BSEC2を手動でダウンロードしてプロジェクトへコピーする必要はありません。PlatformIOが`.pio/libdeps/`へ取得します。
+BSEC2とBME68x Sensor libraryを手動でダウンロードしてプロジェクトへコピーする必要はありません。PlatformIOが公式GitHubリポジトリから`.pio/libdeps/`へ取得します。
 
 ## ビルドと書き込み
 

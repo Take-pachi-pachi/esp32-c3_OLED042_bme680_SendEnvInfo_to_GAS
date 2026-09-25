@@ -392,6 +392,7 @@ void loop() {
   }
 
   u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.clearBuffer();
   if (!isnan(bmeTemperatureDisplay)) {
     snprintf(line, sizeof(line), "%.1f C", bmeTemperatureDisplay);
     u8g2.drawStr(xOffset + 2, yOffset + 8, line);

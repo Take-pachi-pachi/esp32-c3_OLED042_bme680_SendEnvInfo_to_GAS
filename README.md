@@ -54,11 +54,11 @@ const char* WIFI_SSID     = "使用するWi-FiのSSID";
 const char* WIFI_PASSWORD = "Wi-Fiパスワード";
 const char* SHEET_URL     = "GAS WebアプリのURL";
 const char* SHEET_NAME    = "Test";
-const int SEND_MINUTES[]  = {10};
+const int SEND_MINUTES[]  = {10, 50};
 
 const bool DEBUG_MODE     = true;
 const bool OLED_ROTATED   = true;
-const bool BSEC_USE_ULP   = true;   // true: ULP（約5分）、false: LP（約3秒）
+const bool BSEC_USE_ULP   = false;  // true: ULP（約5分）、false: LP（約3秒）
 const uint8_t BME680_I2C_ADDRESS = 0x77;
 
 // BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正です。
@@ -69,11 +69,14 @@ const float PRESS_OFFSET = 0.0F;
 
 const char* NTP_SERVER_PRIMARY   = "ntp.nict.jp";
 const char* NTP_SERVER_SECONDARY = "pool.ntp.org";
+const char* TIME_ZONE            = "JST-9";
 ```
 
 `config.h`にはWi-FiパスワードやGAS URLが含まれるため、公開リポジトリへ実際の値を登録しないでください。実機用設定はローカル環境で保持し、READMEのサンプルはプレースホルダーとして扱います。
 
-> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。実際の運用では `BSEC_USE_ULP` を `true` にして 5 分周期を使う構成がデフォルトです。
+`TIME_ZONE`はPOSIX形式のタイムゾーン文字列です。日本時間は`JST-9`を指定します。POSIX形式ではUTCより東側のオフセットを負の値で表すため、`UTC+9`に相当する指定が`JST-9`になります。
+
+> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。`BSEC_USE_ULP` の現在の設定例は `false`（LP、約3秒周期）です。
 
 ## ULP/LP動作モード
 
@@ -222,7 +225,7 @@ https://docs.google.com/spreadsheets/d/ここがスプレッドシートID/edit
 | パラメータ | 内容 |
 | --- | --- |
 | `p7` | `SHEET_NAME`のシート名 |
-| `p1` | NTPで取得した時刻（`YYYY-MM-DD_HH:MM`） |
+| `p1` | NTPで補正されたESP32内部時計の時刻（`YYYY-MM-DD_HH:MM`） |
 | `p2` | BSEC熱補償後の温度（℃） |
 | `p3` | 補正後の湿度（%） |
 | `p4` | 補正後の気圧（hPa） |
@@ -245,7 +248,39 @@ const int SEND_MINUTES[] = {10};
 const int SEND_MINUTES[] = {10, 40};
 ```
 
-起動時にWi-Fiへ接続してNTP同期を行い、その後は通常Wi-Fiを切断します。指定した送信時刻を過ぎた最初のループでWi-Fiへ再接続し、NTP再同期後に直前に取得済みの値を送信します。そのためULPモードでは、指定時刻ぴったりではなく最大で約5分後に送信されます。送信時にセンサを取り直す処理はありません。
+起動時にWi-Fiへ接続してNTP同期を行い、その後はWi-Fiを切断します。指定した送信時刻を過ぎた最初のループでWi-Fiへ再接続し、接続直後にNTPでESP32内部時計を補正します。URLの時刻情報は、送信時にこの内部時計を読み取って設定します。送信時にNTPへ直接問い合わせたり、センサを取り直したりする処理はありません。そのためULPモードでは、指定時刻ぴったりではなく最大で約5分後に送信されます。Wi-Fi接続またはNTP同期に失敗した場合は送信を中止します。
+
+## コードの処理の流れ
+
+### 起動時
+
+1. シリアル通信を初期化します。
+2. Wi-Fiへ接続します。
+3. Wi-Fi接続成功後、`configTime()`でNTPを設定し、ESP32内部時計を日本標準時に合わせます。
+4. 初期NTP同期後、通常時の消費電力を抑えるためWi-Fiを切断します。
+5. OLEDとI2Cバスを初期化し、接続されているI2Cデバイスをスキャンします。
+6. BME680を初期化し、`BSEC_USE_ULP`に応じたBSEC設定とセンサ出力を登録します。
+
+### 繰り返し処理
+
+1. BSECを実行し、温度・湿度・気圧・IAQ・ガス抵抗などを取得します。
+2. BSECの熱補償値に、`config.h`で指定した温度・湿度・気圧の追加補正を適用します。
+3. 補正後の温度・湿度・気圧とIAQをOLEDへ表示します。
+4. `DEBUG_MODE`が`true`の場合、センサ値とESP32内部時計をシリアルへ出力します。
+5. ESP32内部時計を1回読み取り、送信予定時刻か確認します。
+6. 送信予定時刻を過ぎていて、同じ時間帯・同じ予定分にまだ送信していなければ送信処理へ進みます。
+7. Wi-Fiへ接続し、接続直後にNTP同期してESP32内部時計を補正します。
+8. 直前に取得したセンサ値と、送信時に読み取ったESP32内部時計からURLを作成します。
+9. HTTP GETでGAS Webアプリへ送信し、HTTPステータスが`200`から`299`なら成功と判定します。
+10. 送信処理後にWi-Fiを切断し、BSEC動作モードに応じた間隔で処理を繰り返します。
+
+### 送信時刻の判定
+
+`SEND_MINUTES`には、毎時何分に送信するかを`0`から`59`で指定します。現在分以下の予定分のうち、最も大きいものを送信対象にします。例えば`{10, 50}`の場合、10分を過ぎると10分枠、50分を過ぎると50分枠として扱います。
+
+同じ時間・同じ予定分では、`lastScheduledHourKey`と`lastScheduledMinute`によって二重送信を防止します。送信に失敗しても同じ予定分に自動再送はせず、次の予定分まで待機します。
+
+IAQは`run-in`が完了していない場合でも、温度・湿度・気圧が有効なら送信します。ただし、その場合のIAQ（`p5`）は空欄になります。
 
 ## 開発環境の導入
 

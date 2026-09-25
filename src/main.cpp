@@ -100,11 +100,13 @@ void scanI2cDevices() {
   }
 }
 
-void connectWiFi() {
+bool synchronizeNtp();
+
+bool connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("Wi-Fi already connected: ");
     Serial.println(WiFi.localIP());
-    return;
+    return true;
   }
 
   WiFi.mode(WIFI_STA);
@@ -121,8 +123,10 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("Wi-Fi connected: ");
     Serial.println(WiFi.localIP());
+    return synchronizeNtp();
   } else {
     Serial.println("Wi-Fi connection failed");
+    return false;
   }
 }
 
@@ -133,7 +137,7 @@ void disconnectWiFi() {
 }
 
 bool synchronizeNtp() {
-  configTime(9 * 60 * 60, 0, NTP_SERVER_PRIMARY, NTP_SERVER_SECONDARY);
+  configTzTime(TIME_ZONE, NTP_SERVER_PRIMARY, NTP_SERVER_SECONDARY);
   struct tm timeInfo;
   if (!getLocalTime(&timeInfo, 10000)) {
     Serial.println("NTP time synchronization failed");
@@ -150,7 +154,7 @@ bool synchronizeNtp() {
   return true;
 }
 
-bool getTimestamp(char* timestamp, size_t timestampSize) {
+bool getInternalTimestamp(char* timestamp, size_t timestampSize) {
   struct tm timeInfo;
   if (!getLocalTime(&timeInfo, 10000)) {
     return false;
@@ -162,14 +166,9 @@ bool getTimestamp(char* timestamp, size_t timestampSize) {
 
 bool sendMeasurement(float temperature, float humidity, float pressure,
                      float iaq, float runIn) {
-  connectWiFi();
-  if (WiFi.status() != WL_CONNECTED) {
-    return false;
-  }
-
   char timestamp[20];
-  if (!getTimestamp(timestamp, sizeof(timestamp))) {
-    Serial.println("NTP time is not available; measurement was not sent");
+  if (!getInternalTimestamp(timestamp, sizeof(timestamp))) {
+    Serial.println("ESP32 internal time is not available; measurement was not sent");
     return false;
   }
 
@@ -214,8 +213,6 @@ void setup() {
 
   Serial.println("Initial Wi-Fi connection");
   connectWiFi();
-  Serial.println("Initial NTP synchronization");
-  synchronizeNtp();
   disconnectWiFi();
 
   const size_t sendMinuteCount = sizeof(SEND_MINUTES) / sizeof(SEND_MINUTES[0]);
@@ -358,9 +355,23 @@ void loop() {
     }
   }
 
+  struct tm currentTime;
+  const bool hasCurrentTime = getLocalTime(&currentTime, 100);
+
   if (DEBUG_MODE) {
     Serial.println();
     Serial.println("--- Sensor data ---");
+    if (hasCurrentTime) {
+      Serial.printf("ESP32 internal time: %04d-%02d-%02d %02d:%02d:%02d\n",
+                    currentTime.tm_year + 1900,
+                    currentTime.tm_mon + 1,
+                    currentTime.tm_mday,
+                    currentTime.tm_hour,
+                    currentTime.tm_min,
+                    currentTime.tm_sec);
+    } else {
+      Serial.println("ESP32 internal time: unavailable");
+    }
     Serial.println("Temperature:");
     Serial.printf("  BME680 raw: %.2f C\n", bmeTemperature);
     Serial.printf("  BME680 corrected: %.2f C\n",
@@ -381,8 +392,6 @@ void loop() {
   }
 
   u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.clearBuffer();
-
   if (!isnan(bmeTemperatureDisplay)) {
     snprintf(line, sizeof(line), "%.1f C", bmeTemperatureDisplay);
     u8g2.drawStr(xOffset + 2, yOffset + 8, line);
@@ -413,8 +422,7 @@ void loop() {
 
   u8g2.sendBuffer();
 
-  struct tm currentTime;
-  if (getLocalTime(&currentTime, 100)) {
+  if (hasCurrentTime) {
     const int scheduledMinute = getDueScheduledMinute(currentTime.tm_min);
     if (scheduledMinute < 0) {
       delay(SENSOR_DISPLAY_INTERVAL_MS);
@@ -432,11 +440,8 @@ void loop() {
       lastScheduledMinute = scheduledMinute;
       Serial.println("Scheduled measurement started");
       if (!isnan(bmeTemperatureDisplay) && !isnan(humidityValue) && !isnan(pressure)) {
-        connectWiFi();
-        if (WiFi.status() != WL_CONNECTED) {
+        if (!connectWiFi()) {
           Serial.println("Measurement skipped: Wi-Fi connection failed");
-        } else if (!synchronizeNtp()) {
-          Serial.println("Measurement skipped: NTP synchronization failed");
         } else if (!sendMeasurement(bmeTemperatureDisplay, humidityValue, pressure,
                   bme680Iaq, bme680RunIn)) {
           Serial.println("Measurement failed");

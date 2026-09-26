@@ -70,7 +70,7 @@ const bool BSEC_USE_ULP    = true;   // true: ULP（約5分）、false: LP（約
 const bool USE_STATIC_IAQ  = true;   // true: Static IAQ（建物・長期設置向け）, false: 通常のIAQ（モバイル・相対変化向け）
 
 // BSEC内部設定用オフセット（プラスの値で表示温度マイナス）
-const float BSEC_INTERNAL_TEMP_OFFSET_ULP = 1.3F;
+const float BSEC_INTERNAL_TEMP_OFFSET_ULP = 0.6F;
 const float BSEC_INTERNAL_TEMP_OFFSET_LP  = 1.6F;
 
 // BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正
@@ -90,7 +90,7 @@ const char* TIME_ZONE            = "JST-9";
 
 `TIME_ZONE`はPOSIX形式のタイムゾーン文字列です。日本時間は`JST-9`を指定します。POSIX形式ではUTCより東側のオフセットを負の値で表すため、`UTC+9`に相当する指定が`JST-9`になります。
 
-> このプロジェクトでは、BSEC内部温度オフセット（`BSEC_INTERNAL_TEMP_OFFSET_ULP/LP`）と、表示・送信時の最終補正（`DISPLAY_TEMP_OFFSET_ULP/LP`）を分けて管理できます。現在の設定は `BSEC_USE_ULP = true`（ULP、約5分周期）です。
+> このプロジェクトでは、BSEC内部温度オフセット（`BSEC_INTERNAL_TEMP_OFFSET_ULP/LP`）と、表示・送信時の最終補正（`DISPLAY_TEMP_OFFSET_ULP/LP`）を分けて管理できます。
 
 ## ULP/LP動作モード
 

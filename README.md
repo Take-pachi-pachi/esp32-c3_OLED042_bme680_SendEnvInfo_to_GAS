@@ -1,6 +1,8 @@
+# README.md
+
 # ESP32-C3 BME680環境データロガー
 
-ESP32-C3、BME680、0.42インチOLEDを使って、温度・湿度・気圧・IAQを測定する環境データロガーです。測定値はWi-Fi経由でGoogle Apps Script（GAS）のWeb APIへ送信し、Googleスプレッドシートに記録します。
+ESP32-C3、BME680、0.42インチOLEDを使って、温度・湿度・気圧・IAQなどを測定する環境データロガーです。測定値はWi-Fi経由でGoogle Apps Script（GAS）のWeb APIへ送信し、Googleスプレッドシートに記録します。
 
 ## 構成
 
@@ -19,7 +21,6 @@ BSEC2が温度補償、ガス抵抗処理、IAQ計算を行います。IAQは単
 - BME680モジュール
 - 0.42インチOLED SSD1306 I2Cモジュール
 - USBケーブル（データ通信対応）
-- 3.3V電源
 - Windows PC
 - VS Code
 - PlatformIO IDE拡張
@@ -50,33 +51,46 @@ OLEDとBME680を同じI2Cバスへ接続します。
 [src/config.h](src/config.h)を編集します。
 
 ```cpp
-const char* WIFI_SSID     = "使用するWi-FiのSSID";
-const char* WIFI_PASSWORD = "Wi-Fiパスワード";
-const char* SHEET_URL     = "GAS WebアプリのURL";
-const char* SHEET_NAME    = "Home-LDK";
-const int SEND_MINUTES[]  = {00};
+#ifndef CONFIG_H
+#define CONFIG_H
 
-const bool DEBUG_MODE     = false;
-const bool OLED_ROTATED   = true;
+#include <Arduino.h>
+
+const char* WIFI_SSID      = "使用するWi-FiのSSID";
+const char* WIFI_PASSWORD  = "Wi-Fiパスワード";
+const char* SHEET_URL      = "GAS WebアプリのURL";
+const char* SHEET_NAME     = "Home-2F"; // Home-LDK, Home-2F, Test
+
 const uint8_t BME680_I2C_ADDRESS = 0x77;
-const bool BSEC_USE_ULP   = true;   // true: ULP（約5分）、false: LP（約3秒）
+const int SEND_MINUTES[]   = {10};   // GASへ毎時データ送信する分を指定（0～59）。複数指定可。例：{0, 15, 30, 45}
+const bool DEBUG_MODE      = false;  // true: デバッグ情報をシリアル出力する、false: 出力しない
+const bool ENABLE_OLED     = true;   // false にすると2回目の更新から画面消灯
+const bool OLED_ROTATED    = true;   // true: OLEDを180度回転表示する、false: 通常表示
+const bool BSEC_USE_ULP    = true;   // true: ULP（約5分）、false: LP（約3秒）
+const bool USE_STATIC_IAQ  = true;   // true: Static IAQ（建物・長期設置向け）, false: 通常のIAQ（モバイル・相対変化向け）
 
-// BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正です。
-const float TEMP_OFFSET_BME680_ULP = -0.6F;
-const float TEMP_OFFSET_BME680_LP = -0.3F;
-const float HUM_OFFSET_RATE = -0.175F;
-const float PRESS_OFFSET = 0.0F;
+// BSEC内部設定用オフセット（プラスの値で表示温度マイナス）
+const float BSEC_INTERNAL_TEMP_OFFSET_ULP = 1.3F;
+const float BSEC_INTERNAL_TEMP_OFFSET_LP  = 1.6F;
+
+// BSEC標準の温度補正値とは別に、表示・送信用に最後に加える補正
+const float DISPLAY_TEMP_OFFSET_ULP = 0.0F;
+const float DISPLAY_TEMP_OFFSET_LP  = 0.0F;
+const float HUM_OFFSET_RATE         = -0.2F;
+const float PRESS_OFFSET            = 0.0F;
 
 const char* NTP_SERVER_PRIMARY   = "ntp.nict.jp";
 const char* NTP_SERVER_SECONDARY = "pool.ntp.org";
 const char* TIME_ZONE            = "JST-9";
+
+#endif
 ```
 
 `config.h`にはWi-FiパスワードやGAS URLが含まれるため、公開リポジトリへ実際の値を登録しないでください。実機用設定はローカル環境で保持し、READMEのサンプルはプレースホルダーとして扱います。
 
 `TIME_ZONE`はPOSIX形式のタイムゾーン文字列です。日本時間は`JST-9`を指定します。POSIX形式ではUTCより東側のオフセットを負の値で表すため、`UTC+9`に相当する指定が`JST-9`になります。
 
-> このプロジェクトでは、`TEMP_OFFSET_BME680_ULP/LP` は表示・送信時の最終補正であり、BSEC ライブラリ側の標準温度補正値と分けて管理します。現在の設定は `BSEC_USE_ULP = true`（ULP、約5分周期）です。
+> このプロジェクトでは、BSEC内部温度オフセット（`BSEC_INTERNAL_TEMP_OFFSET_ULP/LP`）と、表示・送信時の最終補正（`DISPLAY_TEMP_OFFSET_ULP/LP`）を分けて管理できます。現在の設定は `BSEC_USE_ULP = true`（ULP、約5分周期）です。
 
 ## ULP/LP動作モード
 
@@ -97,7 +111,7 @@ BsecOperationMode::ULP
 - 電池駆動・長期測定向け
 - 3.3V用ULP BSEC設定を自動適用
 - `BSEC_SAMPLE_RATE_ULP`を自動選択
-- LCD更新も約5分周期
+- 画面更新も約5分周期
 
 ### LP
 
@@ -110,7 +124,7 @@ BsecOperationMode::LP
 - 温度・湿度・ガス抵抗の変化を短い間隔で確認可能
 - 3.3V用LP BSEC設定を自動適用
 - `BSEC_SAMPLE_RATE_LP`を自動選択
-- LCD更新も約3秒周期
+- 画面更新も約3秒周期
 
 BSEC設定ファイルはBSEC2ライブラリ内の次のファイルを使用します。
 
@@ -121,33 +135,40 @@ BSEC設定ファイルはBSEC2ライブラリ内の次のファイルを使用�
 
 モードを変更したときに、サンプルレートやBSEC設定ファイルを別途変更する必要はありません。
 
+### OLED表示設定（ENABLE_OLED）
+
+`ENABLE_OLED = false` に設定した場合でも、起動直後（1回目の描画）はステータス確認のためにOLEDに表示が行われます。2回目の更新タイミング（LP時約3秒後 / ULP時約5分後）から画面が消灯（全消去）され、消費電力を抑制します。
+
 ### 温度補正
 
 補正値は動作モードごとに設定します。
 
 ```cpp
-const float TEMP_OFFSET_BME680_ULP = 0.0F;
-const float TEMP_OFFSET_BME680_LP = 0.0F;
+// BSEC内部用オフセット
+const float BSEC_INTERNAL_TEMP_OFFSET_ULP = 1.3F;
+const float BSEC_INTERNAL_TEMP_OFFSET_LP  = 1.6F;
+
+// 表示・送信用の追加補正
+const float DISPLAY_TEMP_OFFSET_ULP = 0.0F;
+const float DISPLAY_TEMP_OFFSET_LP  = 0.0F;
 ```
 
-`TEMP_OFFSET_BME680_ULP/LP`はBSEC標準の温度補正とは別に、表示・送信する温度へ最後に加える追加補正です。BSECには標準の温度補正値だけを渡します。
+`DISPLAY_TEMP_OFFSET_ULP/LP`はBSEC標準の温度補正とは別に、表示・送信する温度へ最後に加える追加補正です。
 
 ```text
-BSECの温度出力 = BSEC標準の温度補正
-表示・送信温度 = BSECの温度出力 + TEMP_OFFSET_BME680_ULP（ULP時）
-表示・送信温度 = BSECの温度出力 + TEMP_OFFSET_BME680_LP  （LP時）
+BSECの補正温度 = BSEC内部の熱補償出力
+表示・送信温度 = BSECの補正温度 + DISPLAY_TEMP_OFFSET_ULP（ULP時）
+表示・送信温度 = BSECの補正温度 + DISPLAY_TEMP_OFFSET_LP  （LP時）
 ```
-
-基準温度計より表示が高い場合は、該当する追加補正値をマイナスにします。例えばLP時に0.5℃下げる場合は、`TEMP_OFFSET_BME680_LP = -0.5F`とします。
 
 ### 湿度・気圧補正
 
 ```text
 補正後湿度 = BSEC出力湿度 * (1 + HUM_OFFSET_RATE)
-補正後気圧 = BSEC出力気圧 + PRESS_OFFSET
+補正後気圧 = BSEC生気圧 + PRESS_OFFSET
 ```
 
-現在のコードはBSECのraw humidityに`HUM_OFFSET_RATE`を適用します。熱補償湿度出力も登録していますが、raw humidityが取得できない場合のフォールバックとして使用します。気圧はhPa単位で扱います。
+現在のコードはBSECの熱補償湿度（`CompHum`）または生湿度（`RawHum`）に`HUM_OFFSET_RATE`を適用します。気圧はhPa単位で扱います。
 
 ## IAQ計算
 
@@ -164,7 +185,7 @@ BME680の「ガス抵抗」だけをそのまま IAQ とみなすのは、実際
 - `BSEC_OUTPUT_STABILIZATION_STATUS`: 安定化の進行状況
 - `BSEC_OUTPUT_RUN_IN_STATUS`: run-in の進行状況
 
-BSEC はこれらの値を組み合わせて、室内の換気・におい・湿度・温度の変化を総合的に評価し、`BSEC_OUTPUT_IAQ` を出力します。つまり、IAQ は「ガス抵抗の大きさ」そのものではなく、BSEC が学習・補正した環境状態に基づく評価値です。
+BSEC はこれらの値を組み合わせて、室内の換気・におい・湿度・温度の変化を総合的に評価し、`BSEC_OUTPUT_IAQ` または `BSEC_OUTPUT_STATIC_IAQ` を出力します。`config.h` の `USE_STATIC_IAQ` が `true` の場合は、建物や設置型環境に適した Static IAQ が使用・表示されます。
 
 ### 重要なポイント
 
@@ -172,25 +193,20 @@ BSEC はこれらの値を組み合わせて、室内の換気・におい・湿
    - ばらつきが大きく、温度・湿度の変化に影響されやすい
    - 真の IAQ は、抵抗値だけでなく周囲環境との関係を含めて計算される
 
-2. BSEC は run-in を必要とする
-   - センサが一定の環境に慣れて、ベースラインが安定するまで IAQ は不安定です
-   - `BSEC_OUTPUT_RUN_IN_STATUS` が完了するまでは、IAQ は信頼度が低くなります
-   - プロジェクトでは `runIn <= 0` の場合は IAQ 送信を空欄にしています
+2. BSEC は run-in やキャリブレーション（Accuracy）を必要とする
+   - センサが一定の環境に慣れて、ベースラインが安定するまで IAQ は不定です
+   - `accuracy > 0` になるまでは、GAS送信時のIAQ関連パラメータ（p6〜p9）は空欄（無効値）として送信されます
 
-3. IAQ は精度情報とセットで返る
-   - `BSEC_OUTPUT_IAQ` の値だけでなく、`accuracy` も返されます
-   - 精度が低い段階では、値が変動しやすく、意味のある判定には時間が必要です
-
-4. 3.3V 用構成ファイルがモードごとに選ばれる
+3. 3.3V 用構成ファイルがモードごとに選ばれる
    - `bme680_iaq_33v_300s_4d` は ULP 向け
    - `bme680_iaq_33v_3s_4d` は LP 向け
    - どちらも BSEC の IAQ モデルに基づく設定ファイルです
 
-このため、今回のコードは「ガス抵抗から手計算で IAQ を作る」のではなく、BSEC が最適化した IAQ アルゴリズムの出力を使う設計になっています。実際の運用では、測定後に数分〜数十分の run-in を経てから IAQ の値が安定し、ようやく室内の快適さや換気状態の判断に使えるようになります。
+このため、今回のコードは「ガス抵抗から手計算で IAQ を作る」のではなく、BSEC が最適化した IAQ アルゴリズムの出力を使う設計になっています。
 
 ## GASの準備
 
-詳細は https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/ を参照。
+詳細は [https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/](https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/) を参照。
 
 ### 1. スプレッドシート
 
@@ -222,15 +238,24 @@ https://docs.google.com/spreadsheets/d/ここがスプレッドシートID/edit
 
 ## GASへ送信するデータ
 
-| パラメータ | 内容 |
-| --- | --- |
-| `p7` | `SHEET_NAME`のシート名 |
-| `p1` | NTPで補正されたESP32内部時計の時刻（`YYYY-MM-DD_HH:MM`） |
-| `p2` | BSEC熱補償後の温度（℃） |
-| `p3` | 補正後の湿度（%） |
-| `p4` | 補正後の気圧（hPa） |
-| `p5` | IAQ。`run-in`が完了するまでは空欄 |
-| `p6` | 温度と湿度から計算した不快指数（DI） |
+HTTP GET クエリパラメータ（`p1`〜`p14`）としてデータを送信します。
+
+| パラメータ | 内容 | 備考 |
+| --- | --- | --- |
+| `p1` | `SHEET_NAME`のシート名 | 例: `Home-2F` |
+| `p2` | NTPで補正されたESP32内部時計の時刻 | 形式: `YYYY-MM-DD_HH:MM` |
+| `p3` | 補正後の温度（℃） | 小数点第2位まで |
+| `p4` | 補正後の湿度（%） | 小数点第2位まで |
+| `p5` | 補正後の気圧（hPa） | 小数点第2位まで |
+| `p6` | 通常 IAQ | Accuracy > 0 の場合のみ送信 |
+| `p7` | Static IAQ | Accuracy > 0 の場合のみ送信 |
+| `p8` | eCO2 (ppm) | Accuracy > 0 の場合のみ送信 |
+| `p9` | bVOC equivalent (ppm) | Accuracy > 0 の場合のみ送信 |
+| `p10` | ガス抵抗値 (Ohm) | 整数表記 |
+| `p11` | ガス割合 (%) | 小数点第2位まで |
+| `p12` | Stabilization ステータス | 整数表記 |
+| `p13` | Run-in ステータス | 整数表記 |
+| `p14` | 不快指数 (Discomfort Index) | 温度・湿度から自動計算 |
 
 GAS Webアプリはリダイレクトを返すため、ESP32側ではリダイレクト追従を有効にしています。
 
@@ -255,24 +280,21 @@ const int SEND_MINUTES[] = {10, 40};
 ### 起動時
 
 1. シリアル通信を初期化します。
-2. Wi-Fiへ接続します。
-3. Wi-Fi接続成功後、`configTzTime()`でNTPサーバーとタイムゾーンを設定し、ESP32内部時計を日本標準時に合わせます。
-4. 初期NTP同期後、通常時の消費電力を抑えるためWi-Fiを切断します。
-5. OLEDとI2Cバスを初期化し、接続されているI2Cデバイスをスキャンします。
-6. BME680を初期化し、`BSEC_USE_ULP`に応じたBSEC設定とセンサ出力を登録します。
+2. Wi-Fiへ接続し、`configTzTime()`でNTPサーバーとタイムゾーンを設定してESP32内部時計を日本標準時に合わせます。
+3. 初期NTP同期後、通常時の消費電力を抑えるためWi-Fiを切断します。
+4. OLEDとI2Cバスを初期化し、接続されているI2Cデバイスをスキャンします。
+5. BME680を初期化し、`BSEC_USE_ULP`に応じたBSEC設定とセンサ出力を登録します。
 
 ### 繰り返し処理
 
-1. BSECを実行し、温度・湿度・気圧・IAQ・ガス抵抗などを取得します。
-2. BSECの熱補償値に、`config.h`で指定した温度・湿度・気圧の追加補正を適用します。
-3. 補正後の温度・湿度・気圧とIAQをOLEDへ表示します。
-4. `DEBUG_MODE`が`true`の場合、センサ値とESP32内部時計をシリアルへ出力します。
-5. ESP32内部時計を1回読み取り、送信予定時刻か確認します。
-6. 送信予定時刻を過ぎていて、同じ時間帯・同じ予定分にまだ送信していなければ送信処理へ進みます。
-7. Wi-Fiへ接続し、接続直後にNTP同期してESP32内部時計を補正します。
-8. 直前に取得したセンサ値と、送信時に読み取ったESP32内部時計からURLを作成します。
-9. HTTP GETでGAS Webアプリへ送信し、HTTPステータスが`200`から`299`なら成功と判定します。
-10. 送信処理後にWi-Fiを切断し、BSEC動作モードに応じた間隔で処理を繰り返します。
+1. BSECを実行（`processBsecOutputs`）し、各種出力（温度・湿度・気圧・IAQ・CO2等）をグローバル変数に格納します。
+2. 測定・表示周期タイミング（初回即時実行、以降は ULP: 5分 / LP: 3秒 間隔）に到達したかを判定します。
+3. 補正後の温度・湿度・気圧およびIAQをOLEDへ表示します（2回目以降で `ENABLE_OLED = false` の場合は消灯）。
+4. `DEBUG_MODE`が`true`の場合、詳細なセンサ値とESP32内部時計をシリアルへ出力します。
+5. ESP32内部時計を取得し、送信予定時刻（`SEND_MINUTES`）を通過したか確認します。
+6. 送信対象かつ同じ時間帯・予定分で未送信の場合、送信処理へ進みます。
+7. Wi-Fiへ接続し、NTP同期で内部時計を補正後、クエリ文字列（`p1`〜`p14`）を作成してHTTP GET送信を行います。
+8. 送信処理後にWi-Fiを切断し、次の周期までループを継続します。
 
 ### 送信時刻の判定
 
@@ -280,15 +302,13 @@ const int SEND_MINUTES[] = {10, 40};
 
 同じ時間・同じ予定分では、`lastScheduledHourKey`と`lastScheduledMinute`によって二重送信を防止します。送信に失敗しても同じ予定分に自動再送はせず、次の予定分まで待機します。
 
-IAQは`run-in`が完了していない場合でも、温度・湿度・気圧が有効なら送信します。ただし、その場合のIAQ（`p5`）は空欄になります。
-
 ## 開発環境の導入
 
 ### 1. VS Codeをインストール
 
 公式サイトからVisual Studio Codeをインストールします。
 
-<https://code.visualstudio.com/>
+[https://code.visualstudio.com/](https://code.visualstudio.com/)
 
 ### 2. PlatformIO IDEをインストール
 
@@ -317,11 +337,9 @@ src/config.h
 `platformio.ini`により、次のライブラリが自動導入されます。
 
 - `olikraus/U8g2`
-- `https://github.com/BoschSensortec/Bosch-BME68x-Library.git`
-- `https://github.com/BoschSensortec/Bosch-BSEC2-Library.git`
+- `[https://github.com/BoschSensortec/Bosch-BME68x-Library.git](https://github.com/BoschSensortec/Bosch-BME68x-Library.git)`
+- `[https://github.com/BoschSensortec/Bosch-BSEC2-Library.git](https://github.com/BoschSensortec/Bosch-BSEC2-Library.git)`
 - ESP32 Arduino標準の`WiFi`、`HTTPClient`、`Wire`
-
-BSEC2とBME68x Sensor libraryを手動でダウンロードしてプロジェクトへコピーする必要はありません。PlatformIOが公式GitHubリポジトリから`.pio/libdeps/`へ取得します。
 
 ## ビルドと書き込み
 
@@ -344,20 +362,6 @@ platformio run
 platformio run --target upload
 ```
 
-`platformio`コマンドが見つからない場合は、PlatformIOの実行ファイルを直接指定します。
-
-```powershell
-C:\Users\<ユーザー名>\.platformio\penv\Scripts\platformio.exe run
-C:\Users\<ユーザー名>\.platformio\penv\Scripts\platformio.exe run --target upload
-```
-
-初回ビルドでは依存ライブラリがダウンロードされます。成功時は次のように表示されます。
-
-```text
-Successfully created esp32c3 image.
-========================= [SUCCESS] =========================
-```
-
 ## シリアルモニター
 
 通信速度は`115200`です。
@@ -378,16 +382,7 @@ Initializing BSEC at I2C address 0x77 ...
 BME680/BSEC: OK
 ```
 
-デバッグ有効時は、温度・湿度・気圧・IAQ・ガス抵抗・Stabilization・run-inを表示します。
-
-```text
-Gas sensor:
-  IAQ: 50.00, accuracy: 0
-  Gas resistance: 1000000 ohm
-  Stabilization: 1, run-in: 0
-```
-
-IAQの`accuracy: 0`や`run-in: 0`は起動直後には正常です。BSECの学習が進むまで、IAQは初期値付近に留まる場合があります。
+`DEBUG_MODE = true` 設定時は、より詳細なパラメータ群（不快指数 DI や CO2, bVOC, 各種精度フラグなど）がシリアルへ出力されます。
 
 ## トラブルシューティング
 
@@ -409,7 +404,7 @@ IAQの`accuracy: 0`や`run-in: 0`は起動直後には正常です。BSECの学�
 
 ### `BME680/BSEC: NG`
 
-初期化失敗時の直前に表示される`BSEC error code`、`BSEC warning code`、`BME68X error code`を確認します。I2Cスキャンで`0x77`が見えていても、BSEC設定、電源電圧、配線が正しいとは限りません。
+初期化失敗時の直前に表示される`BSEC error code`、`BSEC warning code`、`BME68X error code`を確認します。
 
 ### COMポートが使用中
 
@@ -418,10 +413,6 @@ Could not open COMx, the port is busy or doesn't exist.
 ```
 
 シリアルモニター、Arduino IDE、別のターミナルなどCOMポートを使用しているアプリを閉じてから、Uploadを再実行します。
-
-### 気圧が約1 hPaになる
-
-BSEC2の出力はすでにhPaへ変換されています。コード側でさらに`/ 1000`しないでください。正常な気圧は通常、約`1000 hPa`前後です。
 
 ## ライセンス
 

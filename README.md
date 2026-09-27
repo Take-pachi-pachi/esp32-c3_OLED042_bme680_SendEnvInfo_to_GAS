@@ -170,40 +170,6 @@ BSECの補正温度 = BSEC内部の熱補償出力
 
 現在のコードはBSECの熱補償湿度（`CompHum`）または生湿度（`RawHum`）に`HUM_OFFSET_RATE`を適用します。気圧はhPa単位で扱います。
 
-## IAQ計算
-
-BME680の「ガス抵抗」だけをそのまま IAQ とみなすのは、実際には不適切です。ガス抵抗値は環境条件に大きく左右されるため、温度・湿度・気圧の変化や長期的なベースライン変動が混ざります。
-
-このプロジェクトでは、単純な電気抵抗換算ではなく、BSEC（Bosch Sensortec Environmental Cluster）で IAQ を算出しています。BSEC は、次のような情報を同時に扱って内部アルゴリズムで IAQ を推定します。
-
-- `BSEC_OUTPUT_RAW_GAS`: ガス抵抗の生値
-- `BSEC_OUTPUT_RAW_TEMPERATURE`: 温度の生値
-- `BSEC_OUTPUT_RAW_HUMIDITY`: 湿度の生値
-- `BSEC_OUTPUT_RAW_PRESSURE`: 圧力の生値
-- `BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE`: 近接した熱影響を補正した温度
-- `BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY`: 熱補償を反映した湿度
-- `BSEC_OUTPUT_STABILIZATION_STATUS`: 安定化の進行状況
-- `BSEC_OUTPUT_RUN_IN_STATUS`: run-in の進行状況
-
-BSEC はこれらの値を組み合わせて、室内の換気・におい・湿度・温度の変化を総合的に評価し、`BSEC_OUTPUT_IAQ` または `BSEC_OUTPUT_STATIC_IAQ` を出力します。`config.h` の `USE_STATIC_IAQ` が `true` の場合は、建物や設置型環境に適した Static IAQ が使用・表示されます。
-
-### 重要なポイント
-
-1. ガス抵抗は生データであり、IAQ そのものではない
-   - ばらつきが大きく、温度・湿度の変化に影響されやすい
-   - 真の IAQ は、抵抗値だけでなく周囲環境との関係を含めて計算される
-
-2. BSEC は run-in やキャリブレーション（Accuracy）を必要とする
-   - センサが一定の環境に慣れて、ベースラインが安定するまで IAQ は不定です
-   - `accuracy > 0` になるまでは、GAS送信時のIAQ関連パラメータ（p6〜p9）は空欄（無効値）として送信されます
-
-3. 3.3V 用構成ファイルがモードごとに選ばれる
-   - `bme680_iaq_33v_300s_4d` は ULP 向け
-   - `bme680_iaq_33v_3s_4d` は LP 向け
-   - どちらも BSEC の IAQ モデルに基づく設定ファイルです
-
-このため、今回のコードは「ガス抵抗から手計算で IAQ を作る」のではなく、BSEC が最適化した IAQ アルゴリズムの出力を使う設計になっています。
-
 ## GASの準備
 
 詳細は [https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/](https://github.com/Take-pachi-pachi/GAS_sensor-data-to-spreadsheet/) を参照。

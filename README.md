@@ -137,7 +137,11 @@ BSEC設定ファイルはBSEC2ライブラリ内の次のファイルを使用�
 
 ### OLED表示設定（ENABLE_OLED）
 
+#### ENABLE_OLED
 `ENABLE_OLED = false` に設定した場合でも、起動直後（1回目の描画）はステータス確認のためにOLEDに表示が行われます。2回目の更新タイミング（LP時約3秒後 / ULP時約5分後）から画面が消灯（全消去）され、消費電力を抑制します。
+
+#### OLED_ROTATED   = true;
+`OLED_ROTATED   = true` に設定すると、OLED表示を上下反転（180度回転）することができます
 
 ### 温度補正
 
